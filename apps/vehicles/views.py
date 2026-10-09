@@ -13,6 +13,9 @@ from django.db import transaction
 from django.core.paginator import Paginator
 from django.db.models import Q
 
+from django.urls import reverse
+from django.utils.text import Truncator
+
 from .models import Vehicle, Brand, VehicleModel, VehicleType, Color, FuelType
 from .forms import VehicleForm, BrandForm, VehicleModelForm
 from apps.system.models import AuditLog
@@ -68,19 +71,88 @@ def vehicle_list(request):
     vehicles   = vehicles.order_by('-created_at')
     paginator  = Paginator(vehicles, 25)
     page       = request.GET.get('page', 1)
-    page_obj   = paginator.get_page(page)
+    page_obj = paginator.get_page(page)
+
+    status_classes = {
+        'active': 'badge bg-success',
+        'inactive': 'badge bg-secondary',
+    }
+
+    vehicle_rows = []
+
+    for v in page_obj.object_list:
+        vehicle_rows.append({
+            'id': v.pk,
+            'registrationNumber': v.registration_number,
+            'brandName': v.brand.name if v.brand else '',
+            'modelName': v.model.name if v.model else '',
+            'year': v.year or '',
+            'vehicleType': v.vehicle_type.name if v.vehicle_type else '—',
+            'colorName': v.color.name if v.color else '—',
+            'colorHex': (
+                v.color.hex_code
+                if v.color and v.color.hex_code else ''
+            ),
+            'fuelType': v.fuel_type.name if v.fuel_type else '—',
+            'customerName': Truncator(v.customer.name).chars(20),
+            'customerFullName': v.customer.name,
+            'customerPhone': v.customer.phone or '',
+            'customerUrl': reverse(
+                'customer_detail', kwargs={'pk': v.customer_id}
+            ),
+            'statusDisplay': v.get_status_display(),
+            'statusClass': status_classes.get(
+                str(v.status or '').lower(),
+                'badge bg-light text-dark',
+            ),
+            'detailUrl': reverse('vehicle_detail', kwargs={'pk': v.pk}),
+            'editUrl': reverse('vehicle_edit', kwargs={'pk': v.pk}),
+            'deleteUrl': reverse('vehicle_delete', kwargs={'pk': v.pk}),
+        })
+
+    can_create = check_permission(request, PermissionCode.VEHICLES_CREATE)
+    can_edit = check_permission(request, PermissionCode.VEHICLES_EDIT)
+    can_delete = check_permission(request, PermissionCode.VEHICLES_DELETE)
+
+    vehicle_page_data = {
+        'vehicles': vehicle_rows,
+        'search': search,
+        'status': status,
+        'totalCount': paginator.count,
+        'listUrl': reverse('vehicle_list'),
+        'createUrl': reverse('vehicle_create'),
+        'brandListUrl': reverse('brand_list'),
+        'canCreate': can_create,
+        'canEdit': can_edit,
+        'canDelete': can_delete,
+        'pagination': {
+            'number': page_obj.number,
+            'numPages': paginator.num_pages,
+            'hasOtherPages': page_obj.has_other_pages(),
+            'hasPrevious': page_obj.has_previous(),
+            'previousPage': (
+                page_obj.previous_page_number()
+                if page_obj.has_previous() else None
+            ),
+            'hasNext': page_obj.has_next(),
+            'nextPage': (
+                page_obj.next_page_number()
+                if page_obj.has_next() else None
+            ),
+        },
+    }
 
     context = {
-        'page_title':  'Vehicles',
-        'page_obj':    page_obj,
-        'vehicles':    page_obj,
-        'search':      search,
-        'status':      status,
+        'page_title': 'Vehicles',
+        'page_obj': page_obj,
+        'vehicles': page_obj,
+        'search': search,
+        'status': status,
         'total_count': paginator.count,
-        'can_create':  check_permission(request, PermissionCode.VEHICLES_CREATE),
-        'can_edit':    check_permission(request, PermissionCode.VEHICLES_EDIT),
-        'can_delete':  check_permission(request, PermissionCode.VEHICLES_DELETE),
-        'breadcrumbs': [{'label': 'Vehicles', 'url': None}],
+        'can_create': can_create,
+        'can_edit': can_edit,
+        'can_delete': can_delete,
+        'vehicle_page_data': vehicle_page_data,
     }
     return render(request, 'vehicles/vehicle_list.html', context)
 

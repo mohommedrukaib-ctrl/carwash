@@ -1,0 +1,121 @@
+{% load aquaflow_tags %}
+
+{% if services %}
+<div class="aq-table-scroll">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Service</th>
+                <th>Category</th>
+                <th class="num">Duration</th>
+                <th class="num">Default Price</th>
+                <th class="num">Prices</th>
+                <th>Status</th>
+                {% if can_manage %}<th style="width:110px;"></th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for service in services %}
+            <tr id="service-row-{{ service.pk }}">
+                <td>
+                    {% if can_manage %}
+                    <span class="editable-cell fw-semibold" data-field="name" data-id="{{ service.pk }}">{{ service.name }}</span>
+                    {% else %}
+                    <a href="{% url 'service_detail' service.pk %}" class="fw-semibold">{{ service.name }}</a>
+                    {% endif %}
+                    {% if service.description %}
+                    <span class="text-muted d-block" style="font-size:10px;">{{ service.description|truncatechars:45 }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if service.category %}
+                    <span class="badge bg-secondary">{{ service.category.name }}</span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="num nowrap">
+                    {% if can_manage %}
+                    <span class="editable-cell" data-field="duration_minutes" data-id="{{ service.pk }}" data-type="number">{{ service.duration_minutes }}</span>
+                    <span class="text-muted" style="font-size:9.5px;">min</span>
+                    {% else %}{{ service.duration_display }}{% endif %}
+                </td>
+                <td class="num nowrap">
+                    {% with price=service.get_price %}
+                    {% if price %}
+                    <strong class="aq-text-success">{% format_currency price.price %}</strong>
+                    {% else %}
+                    <span class="aq-text-danger" style="font-size:10px;"><i class="fas fa-circle-exclamation me-1"></i>No price</span>
+                    {% endif %}
+                    {% endwith %}
+                </td>
+                <td class="num"><span class="badge bg-info">{{ service.prices.count }}</span></td>
+                <td>
+                    {% if service.is_active %}<span class="badge bg-success">Active</span>
+                    {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+                </td>
+                {% if can_manage %}
+                <td class="nowrap text-end">
+                    <button class="btn btn-sm btn-outline-success btn-icon" title="Set Price"
+                            hx-get="{% url 'service_quick_price' service.pk %}"
+                            hx-target="#priceModal .modal-body"
+                            hx-swap="innerHTML"
+                            data-bs-toggle="modal"
+                            data-bs-target="#priceModal">
+                        <i class="fas fa-dollar-sign"></i>
+                    </button>
+                    <a href="{% url 'service_detail' service.pk %}" class="btn btn-sm btn-outline-primary btn-icon" title="View"><i class="fas fa-eye"></i></a>
+                    <a href="{% url 'service_edit' service.pk %}" class="btn btn-sm btn-outline-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></a>
+                    <button class="btn btn-sm btn-outline-danger btn-icon" title="Delete"
+                            hx-post="{% url 'service_delete' service.pk %}"
+                            hx-target="#service-row-{{ service.pk }}"
+                            hx-swap="outerHTML swap:0.3s"
+                            hx-confirm="Delete '{{ service.name }}'?">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="aq-pagebar">
+    <span>{{ page_obj.paginator.count }} service{{ page_obj.paginator.count|pluralize }} · Page {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_other_pages %}
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link"
+               href="?page={{ page_obj.previous_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}"
+               hx-get="?page={{ page_obj.previous_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}"
+               hx-target="#service-list-container"
+               hx-push-url="true">‹</a>
+        </li>
+        {% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link"
+               href="?page={{ page_obj.next_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}"
+               hx-get="?page={{ page_obj.next_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}"
+               hx-target="#service-list-container"
+               hx-push-url="true">›</a>
+        </li>
+        {% endif %}
+    </ul>
+    {% endif %}
+</div>
+
+{% else %}
+<div class="aq-empty">
+    <i class="fas fa-list-check"></i>
+    <h5>No services found</h5>
+    {% if search %}<p>No results for "<strong>{{ search }}</strong>"</p>
+    <a href="/services/" class="btn btn-sm btn-outline-secondary">Clear Search</a>
+    {% elif can_manage %}
+    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+        <i class="fas fa-plus me-1"></i>Add First Service
+    </button>
+    {% endif %}
+</div>
+{% endif %}

@@ -14,17 +14,10 @@ export default defineConfig({
     emptyOutDir: true,
 
     rollupOptions: {
-      input: {
-        customers: resolve(
-          frontendDir,
-          "src/pages/customers/main.jsx"
-        ),
-
-        // Keep this if you already migrated Trash.
-        trash: resolve(
-          frontendDir,
-          "src/pages/trash/main.jsx"
-        ),
+            input: {
+        trash: resolve(frontendDir, "src/pages/trash/main.jsx"),
+        customers: resolve(frontendDir, "src/pages/customers/main.jsx"),
+        vehicles: resolve(frontendDir, "src/pages/vehicles/main.jsx"),
       },
 
       output: {

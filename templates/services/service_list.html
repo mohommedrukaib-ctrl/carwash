@@ -45,129 +45,48 @@
                 <i class="fas fa-tags me-1"></i>Categories
             </a>
             {% if can_manage %}
-            <button class="btn btn-sm btn-primary" onclick="openAddModal()">
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
                 <i class="fas fa-plus me-1"></i>Add Service
             </button>
             {% endif %}
         </div>
     </div>
 
-    <form method="GET" class="aq-toolbar" id="searchForm">
+    <!-- HTMX Search & Filter Form -->
+    <form class="aq-toolbar"
+          hx-get="{% url 'service_list' %}"
+          hx-target="#service-list-container"
+          hx-push-url="true"
+          hx-trigger="change from:select, keyup delay:400ms from:#searchInput, submit"
+          hx-indicator="#filter-spinner">
         <div class="input-group" style="width:280px;">
             <span class="input-group-text"><i class="fas fa-search"></i></span>
             <input type="text" name="q" class="form-control" id="searchInput"
                    placeholder="Search services…" value="{{ search }}">
-            {% if search %}<a href="/services/" class="btn btn-outline-secondary btn-sm"><i class="fas fa-times"></i></a>{% endif %}
+            {% if search %}<a href="/services/" class="btn btn-outline-secondary btn-sm" hx-get="/services/" hx-target="#service-list-container" hx-push-url="true"><i class="fas fa-times"></i></a>{% endif %}
         </div>
-        <select name="category" class="form-select" style="width:160px;" onchange="this.form.submit()">
+        <select name="category" class="form-select" style="width:160px;">
             <option value="">All Categories</option>
             {% for cat in categories %}
             <option value="{{ cat.pk }}" {% if category == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
             {% endfor %}
         </select>
-        <select name="status" class="form-select" style="width:110px;" onchange="this.form.submit()">
+        <select name="status" class="form-select" style="width:110px;">
             <option value="active" {% if status == 'active' %}selected{% endif %}>Active</option>
             <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option>
             <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
         </select>
-        <button class="btn btn-outline-primary btn-sm"><i class="fas fa-filter me-1"></i>Filter</button>
+        <button class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-filter me-1"></i>Filter
+            <span id="filter-spinner" class="htmx-indicator spinner-border spinner-border-sm ms-1"></span>
+        </button>
     </form>
 
     <div class="aq-panel-body flush">
-        {% if services %}
-        <div class="aq-table-scroll">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Service</th>
-                        <th>Category</th>
-                        <th class="num">Duration</th>
-                        <th class="num">Default Price</th>
-                        <th class="num">Prices</th>
-                        <th>Status</th>
-                        {% if can_manage %}<th style="width:110px;"></th>{% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for service in services %}
-                    <tr data-id="{{ service.pk }}">
-                        <td>
-                            {% if can_manage %}
-                            <span class="editable-cell fw-semibold" data-field="name" data-id="{{ service.pk }}">{{ service.name }}</span>
-                            {% else %}
-                            <a href="{% url 'service_detail' service.pk %}" class="fw-semibold">{{ service.name }}</a>
-                            {% endif %}
-                            {% if service.description %}
-                            <span class="text-muted d-block" style="font-size:10px;">{{ service.description|truncatechars:45 }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if service.category %}
-                            <span class="badge bg-secondary">{{ service.category.name }}</span>
-                            {% else %}<span class="text-muted">—</span>{% endif %}
-                        </td>
-                        <td class="num nowrap">
-                            {% if can_manage %}
-                            <span class="editable-cell" data-field="duration_minutes" data-id="{{ service.pk }}" data-type="number">{{ service.duration_minutes }}</span>
-                            <span class="text-muted" style="font-size:9.5px;">min</span>
-                            {% else %}{{ service.duration_display }}{% endif %}
-                        </td>
-                        <td class="num nowrap">
-                            {% with price=service.get_price %}
-                            {% if price %}
-                            <strong class="aq-text-success">{% format_currency price.price %}</strong>
-                            {% else %}
-                            <span class="aq-text-danger" style="font-size:10px;"><i class="fas fa-circle-exclamation me-1"></i>No price</span>
-                            {% endif %}
-                            {% endwith %}
-                        </td>
-                        <td class="num"><span class="badge bg-info">{{ service.prices.count }}</span></td>
-                        <td>
-                            {% if service.is_active %}<span class="badge bg-success">Active</span>
-                            {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
-                        </td>
-                        {% if can_manage %}
-                        <td class="nowrap text-end">
-                            <button class="btn btn-sm btn-outline-success btn-icon" title="Set Price"
-                                    onclick="openPriceModal({{ service.pk }}, '{{ service.name|escapejs }}')">
-                                <i class="fas fa-dollar-sign"></i>
-                            </button>
-                            <a href="{% url 'service_detail' service.pk %}" class="btn btn-sm btn-outline-primary btn-icon" title="View"><i class="fas fa-eye"></i></a>
-                            <a href="{% url 'service_edit' service.pk %}" class="btn btn-sm btn-outline-secondary btn-icon" title="Edit"><i class="fas fa-pen"></i></a>
-                            <button class="btn btn-sm btn-outline-danger btn-icon" title="Delete"
-                                    onclick="deleteService({{ service.pk }}, '{{ service.name|escapejs }}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- HTMX swaps this container -->
+        <div id="service-list-container">
+            {% include "services/partials/service_table.html" %}
         </div>
-
-        <div class="aq-pagebar">
-            <span>{{ page_obj.paginator.count }} service{{ page_obj.paginator.count|pluralize }} · Page {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span>
-            {% if page_obj.has_other_pages %}
-            <ul class="pagination pagination-sm mb-0">
-                {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}">‹</a></li>{% endif %}
-                <li class="page-item disabled"><span class="page-link">{{ page_obj.number }}</span></li>
-                {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search }}&status={{ status }}&category={{ category }}">›</a></li>{% endif %}
-            </ul>
-            {% endif %}
-        </div>
-
-        {% else %}
-        <div class="aq-empty">
-            <i class="fas fa-list-check"></i>
-            <h5>No services found</h5>
-            {% if search %}<p>No results for "<strong>{{ search }}</strong>"</p>
-            <a href="/services/" class="btn btn-sm btn-outline-secondary">Clear Search</a>
-            {% elif can_manage %}
-            <button class="btn btn-sm btn-primary" onclick="openAddModal()"><i class="fas fa-plus me-1"></i>Add First Service</button>
-            {% endif %}
-        </div>
-        {% endif %}
     </div>
 </div>
 
@@ -180,40 +99,45 @@
                 <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-2">
-                    <div class="col-md-8">
-                        <label class="form-label">Service Name <span class="text-danger">*</span></label>
-                        <input type="text" id="newName" class="form-control" placeholder="e.g. Premium Wash, Tire Replacement">
+                <form hx-post="{% url 'service_create' %}"
+                      hx-target="#addModal .modal-body"
+                      hx-swap="innerHTML"
+                      hx-on::after-request="if(event.detail.successful) htmx.trigger(document.body, 'refreshList')">
+                    <div class="row g-2">
+                        <div class="col-md-8">
+                            <label class="form-label">Service Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" placeholder="e.g. Premium Wash, Tire Replacement" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Category</label>
+                            <div class="aq-smart-input" id="newCategoryInput"
+                                 data-name="category"
+                                 data-search-url="/services/categories/create/"
+                                 data-create-url="/services/categories/create/"
+                                 data-results-key="categories"
+                                 data-label="Category"
+                                 data-placeholder="Search or create…"></div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="2" placeholder="Optional description"></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Duration (minutes)</label>
+                            <input type="number" name="duration_minutes" class="form-control" value="30" min="5" max="480">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Default Price ({{ CURRENCY_SYMBOL }})</label>
+                            <input type="number" name="default_price" class="form-control" min="0" step="0.01" placeholder="0.00">
+                            <small class="text-muted" style="font-size:10px;">Optional</small>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Category</label>
-                        <div class="aq-smart-input" id="newCategoryInput"
-                             data-name="category"
-                             data-search-url="/services/categories/create/"
-                             data-create-url="/services/categories/create/"
-                             data-results-key="categories"
-                             data-label="Category"
-                             data-placeholder="Search or create…"></div>
+                    <div id="addError" class="alert alert-danger mt-2 mb-0" style="display:none;"></div>
+                    <div class="mt-3 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-save me-1"></i>Save Service</button>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label">Description</label>
-                        <textarea id="newDesc" class="form-control" rows="2" placeholder="Optional description"></textarea>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Duration (minutes)</label>
-                        <input type="number" id="newDuration" class="form-control" value="30" min="5" max="480">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Default Price ({{ CURRENCY_SYMBOL }})</label>
-                        <input type="number" id="newPrice" class="form-control" min="0" step="0.01" placeholder="0.00">
-                        <small class="text-muted" style="font-size:10px;">Optional</small>
-                    </div>
-                </div>
-                <div id="addError" class="alert alert-danger mt-2 mb-0" style="display:none;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-sm btn-primary" id="saveServiceBtn"><i class="fas fa-save me-1"></i>Save Service</button>
+                </form>
             </div>
         </div>
     </div>
@@ -224,36 +148,11 @@
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-dollar-sign me-2"></i>Set Price — <span id="priceServiceName"></span></h5>
+                <h5 class="modal-title"><i class="fas fa-dollar-sign me-2"></i>Set Price</h5>
                 <button class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info py-1 mb-2" style="font-size:10.5px;">
-                    <i class="fas fa-circle-info me-1"></i>Leave both empty for a <strong>default price</strong>.
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Price ({{ CURRENCY_SYMBOL }}) <span class="text-danger">*</span></label>
-                    <input type="number" id="priceInput" class="form-control" min="0" step="0.01" placeholder="0.00">
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Vehicle Type</label>
-                    <select id="priceVehicleType" class="form-select">
-                        <option value="">— All Vehicle Types —</option>
-                        {% for vt in vehicle_types %}<option value="{{ vt.pk }}">{{ vt.name }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label">Branch</label>
-                    <select id="priceBranch" class="form-select">
-                        <option value="">— All Branches —</option>
-                        {% for br in branches %}<option value="{{ br.pk }}">{{ br.name }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div id="priceError" class="alert alert-danger mb-0" style="display:none;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-sm btn-primary" id="savePriceBtn"><i class="fas fa-save me-1"></i>Save Price</button>
+                <!-- Loaded via HTMX -->
             </div>
         </div>
     </div>
@@ -263,10 +162,9 @@
 
 {% block extra_js %}
 <script>
-const CSRF_TOKEN = '{{ csrf_token }}';
-let currentServiceId = null;
+// Keep only inline editing & smart-input init.
+// HTMX now handles search, filters, pagination, modals, and delete.
 
-// ─── Inline edit ────────────────────────────────────────────
 document.querySelectorAll('.editable-cell').forEach(cell => {
     cell.addEventListener('click', function () {
         if (this.querySelector('input')) return;
@@ -298,117 +196,11 @@ function saveInline(cell, id, field) {
     fd.append('value', value);
 
     fetch(`/services/${id}/edit-inline/`, {
-        method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, body: fd,
+        method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: fd,
     }).then(r => r.json()).then(data => {
         if (data.success) { cell.textContent = data.value; showToast(data.message, 'success'); }
         else { cell.textContent = original; showToast(data.error, 'error'); }
     }).catch(() => { cell.textContent = original; showToast('Network error.', 'error'); });
 }
-
-// ─── Add Service ────────────────────────────────────────────
-function openAddModal() {
-    document.getElementById('newName').value = '';
-    document.getElementById('newDesc').value = '';
-    document.getElementById('newDuration').value = '30';
-    document.getElementById('newPrice').value = '';
-    document.getElementById('addError').style.display = 'none';
-
-    const catInput = document.getElementById('newCategoryInput');
-    if (catInput && catInput._smartInput) {
-        const si = catInput._smartInput;
-        si.input.value = '';
-        si.hiddenInput.value = '';
-        si.pendingHidden.value = '';
-        si.clearBtn.style.display = 'none';
-        si.pendingHint.style.display = 'none';
-    }
-
-    new bootstrap.Modal(document.getElementById('addModal')).show();
-    setTimeout(() => document.getElementById('newName').focus(), 300);
-}
-
-document.getElementById('saveServiceBtn').addEventListener('click', function () {
-    const name = document.getElementById('newName').value.trim();
-    const err = document.getElementById('addError');
-    err.style.display = 'none';
-    if (!name) { err.textContent = 'Name required.'; err.style.display = 'block'; return; }
-
-    this.disabled = true;
-    const fd = new FormData();
-    fd.append('name', name);
-    fd.append('description', document.getElementById('newDesc').value.trim());
-    fd.append('duration_minutes', document.getElementById('newDuration').value || '30');
-    fd.append('default_price', document.getElementById('newPrice').value || '');
-
-    const catInput = document.getElementById('newCategoryInput');
-    if (catInput && catInput._smartInput) {
-        const catId = catInput._smartInput.hiddenInput.value;
-        if (catId) fd.append('category_id', catId);
-    }
-
-    fetch('/services/add/', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': CSRF_TOKEN, 'X-Requested-With': 'XMLHttpRequest' },
-        body: fd,
-    }).then(r => r.json()).then(data => {
-        this.disabled = false;
-        if (data.success) { showToast(data.message, 'success'); setTimeout(() => location.reload(), 600); }
-        else { err.textContent = data.error; err.style.display = 'block'; }
-    }).catch(() => { this.disabled = false; showToast('Network error.', 'error'); });
-});
-
-// ─── Quick Price ────────────────────────────────────────────
-function openPriceModal(id, name) {
-    currentServiceId = id;
-    document.getElementById('priceServiceName').textContent = name;
-    document.getElementById('priceInput').value = '';
-    document.getElementById('priceVehicleType').value = '';
-    document.getElementById('priceBranch').value = '';
-    document.getElementById('priceError').style.display = 'none';
-    new bootstrap.Modal(document.getElementById('priceModal')).show();
-    setTimeout(() => document.getElementById('priceInput').focus(), 300);
-}
-
-document.getElementById('savePriceBtn').addEventListener('click', function () {
-    const price = document.getElementById('priceInput').value.trim();
-    const err = document.getElementById('priceError');
-    err.style.display = 'none';
-    if (!price || parseFloat(price) < 0) { err.textContent = 'Valid price required.'; err.style.display = 'block'; return; }
-
-    this.disabled = true;
-    const fd = new FormData();
-    fd.append('price', price);
-    fd.append('vehicle_type_id', document.getElementById('priceVehicleType').value);
-    fd.append('branch_id', document.getElementById('priceBranch').value);
-
-    fetch(`/services/${currentServiceId}/quick-price/`, {
-        method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }, body: fd,
-    }).then(r => r.json()).then(data => {
-        this.disabled = false;
-        if (data.success) {
-            bootstrap.Modal.getInstance(document.getElementById('priceModal')).hide();
-            showToast(data.message, 'success');
-            setTimeout(() => location.reload(), 600);
-        } else { err.textContent = data.error; err.style.display = 'block'; }
-    }).catch(() => { this.disabled = false; showToast('Network error.', 'error'); });
-});
-
-// ─── Delete ─────────────────────────────────────────────────
-function deleteService(id, name) {
-    if (!confirm(`Delete "${name}"?`)) return;
-    fetch(`/services/${id}/delete/`, {
-        method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN },
-    }).then(r => r.json()).then(data => {
-        if (data.success) { showToast(data.message, 'success'); setTimeout(() => location.reload(), 600); }
-        else showToast(data.error, 'error');
-    });
-}
-
-// ─── Live search ────────────────────────────────────────────
-let searchTimer = null;
-document.getElementById('searchInput').addEventListener('input', function () {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => document.getElementById('searchForm').submit(), 450);
-});
 </script>
 {% endblock %}

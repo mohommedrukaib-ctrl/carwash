@@ -13,6 +13,8 @@ Features:
 import logging
 from decimal import Decimal, InvalidOperation
 
+from apps.system.htmx import is_htmx, htmx_trigger
+from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -101,8 +103,9 @@ def service_list(request):
         'total_count':   paginator.count,
         'can_manage':    check_permission(request, PermissionCode.SERVICES_MANAGE),
     }
+    if is_htmx(request):
+        return render(request, 'services/partials/service_table.html', context)
     return render(request, 'services/service_list.html', context)
-
 
 # ─── SERVICE DETAIL ───────────────────────────────────────────
 
@@ -150,10 +153,20 @@ def service_create(request):
         default_price = request.POST.get('default_price', '').strip()
 
         if not name:
-            if is_ajax:
-                return JsonResponse({'success': False, 'error': 'Name required.'}, status=400)
-            messages.error(request, 'Name required.')
-            return redirect('service_create')
+                if is_ajax:
+                    return JsonResponse({
+                        'success': True,
+                        'item': {'id': service.pk, 'label': service.name, 'name': service.name},
+                        'message': f'Service "{name}" created.',
+                    })
+
+                # HTMX success: close modal, show toast, refresh list
+                if is_htmx(request):
+                    response = HttpResponse(status=204)
+                    return htmx_trigger(response, f'Service "{name}" created.', close_modal=True)
+
+                messages.success(request, f'Service "{name}" created.')
+                return redirect('service_detail', pk=service.pk)
 
         try:
             with transaction.atomic():
@@ -328,8 +341,11 @@ def service_delete(request, pk):
         ip_address=get_client_ip(request),
     )
 
-    return JsonResponse({'success': True, 'message': f'Service "{name}" moved to Trash.'})
+    if is_htmx(request):
+        response = HttpResponse(status=200)
+        return htmx_trigger(response, f'Service "{name}" moved to Trash.')
 
+    return JsonResponse({'success': True, 'message': f'Service "{name}" moved to Trash.'})
 
 # ─── PRICE ADD ────────────────────────────────────────────────
 
@@ -417,7 +433,15 @@ def service_price_delete(request, pk, price_pk):
 @require_http_methods(['POST'])
 def service_quick_price_ajax(request, pk):
     if not check_permission(request, PermissionCode.SERVICES_MANAGE):
-        return JsonResponse({'success': False, 'error': 'Permission denied.'}, status=403)
+        if is_htmx(request):
+            response = HttpResponse(status=204)
+            return htmx_trigger(response, f'Price {"created" if created else "updated"}.', close_modal=True)
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Price {"created" if created else "updated"}.',
+            'price': str(price_val),
+        })
 
     service = get_object_or_404(Service, pk=pk, is_deleted=False)
 
